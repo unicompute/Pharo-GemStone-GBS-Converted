@@ -51,11 +51,15 @@ GbsServerInterface >> apiGciErr: errorBuffer [
 ]
 
 { #category : 'api - execution' }
-GbsServerInterface >> apiGciExecute: source context: contextOop [
+GbsServerInterface >> apiGciExecute: aString context: aContext [
     <primitive: #primitiveNativeCall error: errorCode>
-    ^ self ffiCall: #(uint64 GciExecuteStr(char* source, uint64 contextOop))
-        module: libraryPath
-        options: #(+ optNonThreaded)
+    ^ self ffiCall: #(int64 GciExecuteStr(char* aString, int64 aContext))
+]
+
+{ #category : 'api - fetching' }
+GbsServerInterface >> apiGciFetchBytes: anOop into: aBuffer size: bufferSize [
+    <primitive: #primitiveNativeCall error: errorCode>
+    ^ self ffiCall: #(int64 GciFetchBytes(int64 anOop, int64 1, void* aBuffer, int64 bufferSize))
 ]
 
 { #category : 'api - objects' }
@@ -66,12 +70,36 @@ GbsServerInterface >> apiGciFetchChars: anOop into: aBuffer [
         module: libraryPath
 ]
 
+{ #category : 'api - fetching' }
+GbsServerInterface >> apiGciFetchChars: anOop startingAt: startIndex into: aBuffer size: bufferSize [
+    <primitive: #primitiveNativeCall error: errorCode>
+    ^ self ffiCall: #(int64 GciFetchChars_(int64 anOop, int64 startIndex, void* aBuffer, int64 bufferSize))
+]
+
+{ #category : 'api - fetching' }
+GbsServerInterface >> apiGciFetchOops: anOop startingAt: startIndex into: aBuffer size: numOops [
+    <primitive: #primitiveNativeCall error: errorCode>
+    ^ self ffiCall: #(int64 GciFetchOops(int64 anOop, int64 startIndex, void* aBuffer, int64 numOops))
+]
+
+{ #category : 'api - fetching' }
+GbsServerInterface >> apiGciFetchSize: anOop [
+    <primitive: #primitiveNativeCall error: errorCode>
+    ^ self ffiCall: #(int64 GciFetchSize_(int64 anOop))
+]
+
 { #category : 'api - init' }
 GbsServerInterface >> apiGciInit [
     <primitive: #primitiveNativeCall error: errorCode>
     ^ self ffiCall: #(void GciInit(void))
         module: '/Users/tariq/GemStone64Bit3.7.4.3-arm64.Darwin/lib/libgcirpc-3.7.4.3-64.dylib'
         options: #(+ optNonThreaded)
+]
+
+{ #category : 'api - structural' }
+GbsServerInterface >> apiGciIsKindOfClass: anOop isKindOf: aClassOop [
+    <primitive: #primitiveNativeCall error: errorCode>
+    ^ self ffiCall: #(bool GciIsKindOfClass(int64 anOop, int64 aClassOop))
 ]
 
 { #category : 'api - login' }

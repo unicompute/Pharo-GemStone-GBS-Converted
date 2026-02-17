@@ -71,6 +71,16 @@ GbsSession >> commit [
     ^ serverInterface apiGciCommit: sessionId
 ]
 
+{ #category : 'actions' }
+GbsSession >> evaluate: aString [
+    | rawOop |
+    "1. Execute code on Server"
+    rawOop := GbsServerInterface uniqueInstance apiGciExecute: aString context: 20.
+    
+    "2. Decode the result"
+    ^ self fetchObject: rawOop
+]
+
 { #category : 'execution' }
 GbsSession >> evaluateBlock: aBlock [
     "Compiles the block source to a string and executes it on the server"
@@ -121,8 +131,77 @@ GbsSession >> execute: aString [
     ^ resultOop "Return raw Oop if not a simple type"
 ]
 
-{ #category : 'transactions' }
+{ #category : 'marshaling' }
+GbsSession >> fetchObject: anOop [
+    | interface size buffer string arr elemOop tag isString isArray |
+    
+    "1. Handle SmallIntegers"
+    tag := anOop bitAnd: 7.
+    tag = 2 ifTrue: [ ^ (anOop bitShift: -3) ].
+
+    "2. Handle Special Constants"
+    anOop = 20  ifTrue: [ ^ nil ].
+    anOop = 268 ifTrue: [ ^ true ].
+    anOop = 12  ifTrue: [ ^ false ].
+
+    interface := GbsServerInterface uniqueInstance.
+
+    "3. CHECK IF STRING (Class Oop: 74753)"
+    isString := interface apiGciIsKindOfClass: anOop isKindOf: 74753.
+    
+    isString ifTrue: [
+        size := interface apiGciFetchSize: anOop.
+        size = 0 ifTrue: [ ^ '' ].
+        
+        buffer := ExternalAddress allocate: size + 1.
+        [
+            interface apiGciFetchChars: anOop startingAt: 1 into: buffer size: size + 1.
+            string := String new: size.
+            1 to: size do: [ :i | 
+                string at: i put: (buffer unsignedByteAt: i) asCharacter 
+            ].
+        ] ensure: [ buffer free ].
+        ^ string
+    ].
+
+    "4. CHECK IF ARRAY (Class Oop: 66817)"
+    isArray := interface apiGciIsKindOfClass: anOop isKindOf: 66817.
+    
+    isArray ifTrue: [
+        size := interface apiGciFetchSize: anOop.
+        size = 0 ifTrue: [ ^ #() ].
+
+        "Allocate buffer for 'size' number of 64-bit Oops (8 bytes each)"
+        buffer := ExternalAddress allocate: (size * 8).
+        [
+            "Fetch the Oops directly into the buffer"
+            interface apiGciFetchOops: anOop startingAt: 1 into: buffer size: size.
+            
+            arr := Array new: size.
+            1 to: size do: [ :i |
+                "Read the Oop at index i (pointer arithmetic)"
+                elemOop := buffer unsignedLongLongAt: ((i - 1) * 8) + 1.
+                
+                "Recursively decode the element"
+                arr at: i put: (self fetchObject: elemOop).
+            ].
+        ] ensure: [ buffer free ].
+        ^ arr
+    ].
+
+    "5. Fallback"
+    ^ '[Oop: ', anOop printString, ']'
+]
+
+{ #category : 'actions' }
 GbsSession >> logout [
-    serverInterface apiGciLogout: sessionId.
-    GBSM currentSession == self ifTrue: [ GBSM reset ].
+    GbsServerInterface uniqueInstance apiGciLogout: sessionId
+]
+
+{ #category : 'accessing' }
+GbsSession >> sessionId [ ^ sessionId
+]
+
+{ #category : 'accessing' }
+GbsSession >> sessionId: anInteger [ sessionId := anInteger
 ]
