@@ -26,7 +26,7 @@ Class {
 GbsClassicLauncher class >> menuCommandGemStoneOn: aBuilder [
     <worldMenu>
     (aBuilder item: #GemStone)
-        order: 25;
+        order: 79.9;
         label: 'GemStone';
         icon: (self iconNamed: #smallConfiguration);
         with: [
