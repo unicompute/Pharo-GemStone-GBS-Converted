@@ -26,18 +26,19 @@ Class {
 GbsClassicLauncher class >> menuCommandGemStoneOn: aBuilder [
     <worldMenu>
     (aBuilder item: #GemStone)
-        order: 25;  "Higher than 20 -> Appears to the right of Library"
+        order: 25;
         label: 'GemStone';
         icon: (self iconNamed: #smallConfiguration);
         with: [
-            (aBuilder item: #Launcher)
+            (aBuilder item: #ClassicLauncher)
                 label: 'Classic Launcher';
                 action: [ GbsClassicLauncher new open ];
                 icon: (self iconNamed: #glamorousGo).
-            (aBuilder item: #Login)
-                label: 'Login RPC';
-                action: [ GbsClassicLauncher new doLoginRpc ];
-                icon: (self iconNamed: #smallOk).
+                
+            (aBuilder item: #SimpleLauncher)
+                label: 'Simple Launcher';
+                action: [ GbsLauncher new open ];
+                icon: (self iconNamed: #glamorousPlay).
         ].
 ]
 
