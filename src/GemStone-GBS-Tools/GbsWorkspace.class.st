@@ -2,7 +2,8 @@ Class {
 	#name : 'GbsWorkspace',
 	#superclass : 'SpPresenter',
 	#instVars : [
-		'textEditor'
+		'textEditor',
+		'btnExecute'
 	],
 	#category : 'GemStone-GBS-Tools',
 	#package : 'GemStone-GBS-Tools'
@@ -11,8 +12,23 @@ Class {
 { #category : 'layout' }
 GbsWorkspace >> defaultLayout [
     ^ SpBoxLayout newVertical
+        spacing: 5;
+        add: btnExecute height: 30;
         add: textEditor;
         yourself
+]
+
+{ #category : 'gemstone actions' }
+GbsWorkspace >> doIt [
+    "Execute on GemStone, ignore result"
+    | code |
+    code := self selectedCodeOrAll.
+    code ifEmpty: [ ^ self ].
+    
+    [ 
+        GbsSessionParameters currentSession evaluate: code.
+        self inform: 'GemStone DoIt: Executed'.
+    ] on: Error do: [ :ex | self inform: 'GemStone Error: ', ex messageText ].
 ]
 
 { #category : 'actions' }
@@ -34,6 +50,46 @@ GbsWorkspace >> executeInGemStone [
     ] on: Error do: [ :ex | ex pass ].
 ]
 
+{ #category : 'gemstone actions' }
+GbsWorkspace >> gemStoneDebugIt [
+    | code |
+    code := self selectedCodeOrAll.
+    code ifEmpty: [ ^ self ].
+
+    [ 
+        GbsSessionParameters currentSession evaluate: code.
+        self inform: 'GemStone: Executed (No errors to debug)'.
+    ] on: Error do: [ :ex | 
+        "Since we lack a full Remote Debugger, we INSPECT the error 
+         to see the remote message and stack proxy."
+        ex inspect.
+        self inform: 'GemStone Error caught. Inspecting exception...'.
+    ].
+]
+
+{ #category : 'gemstone actions' }
+GbsWorkspace >> gemStonePrintIt [
+    | code result insertStr text selectionEnd newText |
+    code := self selectedCodeOrAll.
+    code ifEmpty: [ ^ self ].
+
+    [ 
+        result := GbsSessionParameters currentSession evaluate: code.
+        insertStr := ' ', result printString.
+        
+        "Fix: Manually insert text since insertAndSelectAfter: is missing"
+        text := textEditor text asString.
+        selectionEnd := textEditor selectionInterval last.
+        
+        newText := (text copyFrom: 1 to: selectionEnd), 
+                   insertStr, 
+                   (text copyFrom: selectionEnd + 1 to: text size).
+                   
+        textEditor text: newText.
+        
+    ] on: Error do: [ :ex | self inform: 'GemStone Error: ', ex messageText ].
+]
+
 { #category : 'initialization' }
 GbsWorkspace >> initialize [
     super initialize.
@@ -49,13 +105,23 @@ GbsWorkspace >> initialize [
 { #category : 'initialization' }
 GbsWorkspace >> initializePresenters [
     textEditor := self newCode.
-    
-    "In Pharo 13, the method is #syntaxHighlight:"
-    textEditor 
-        syntaxHighlight: true;
-        text: '"Type GemStone code here and press CMD+G to execute"
-UserGlobals at: #PharoTime put: DateTime now.
-UserGlobals at: #PharoTime'.
+    textEditor syntaxHighlight: true.
+    textEditor beForObject: self.
+
+    "Set the context menu block"
+    textEditor contextMenu: [ self workspaceMenu ].
+
+    "Initialize Button"
+    btnExecute := self newButton 
+        label: 'Execute in GemStone (Cmd+G)';
+        icon: (self iconNamed: #glamorousPlay);
+        action: [ self inspectIt ].
+
+    "Bind Keys"
+    textEditor bindKeyCombination: $d command toAction: [ self doIt ].
+    textEditor bindKeyCombination: $i command toAction: [ self inspectIt ].
+    textEditor bindKeyCombination: $p command toAction: [ self gemStonePrintIt ].
+    textEditor bindKeyCombination: $g command toAction: [ self inspectIt ].
 ]
 
 { #category : 'initialization' }
@@ -71,9 +137,157 @@ GbsWorkspace >> initializeWindow: aWindowPresenter [
         initialExtent: 600@400.
 ]
 
+{ #category : 'private' }
+GbsWorkspace >> insertResult: aString [
+    | text selectionEnd newText |
+    text := textEditor text asString.
+    selectionEnd := textEditor selectionInterval last.
+    
+    newText := (text copyFrom: 1 to: selectionEnd), 
+               ' ', aString, 
+               (text copyFrom: selectionEnd + 1 to: text size).
+               
+    textEditor text: newText.
+]
+
+{ #category : 'gemstone actions' }
+GbsWorkspace >> inspectIt [
+    | code result |
+    code := self selectedCodeOrAll.
+    code ifEmpty: [ ^ self ].
+
+    [ 
+        result := GbsSessionParameters currentSession evaluate: code.
+        
+        "If it is a Proxy (Remote Object), title it explicitly"
+        result class name = #GbsProxy 
+            ifTrue: [ result inspectWithLabel: 'Remote Object (Proxy)' ]
+            ifFalse: [ result inspect ]. 
+            
+    ] on: Error do: [ :ex | self inform: 'GemStone Error: ', ex messageText ].
+]
+
+{ #category : 'local actions' }
+GbsWorkspace >> localDebugIt [
+    | code |
+    code := self selectedCodeOrAll.
+    code ifEmpty: [ ^ self ].
+
+    "We intentionally DO NOT use an error block here. 
+     This allows the standard Pharo PreDebugWindow to open on error."
+    Smalltalk compiler evaluate: code.
+]
+
+{ #category : 'local actions' }
+GbsWorkspace >> localDoIt [
+    | code |
+    code := self selectedCodeOrAll.
+    code ifEmpty: [ ^ self ].
+    
+    [ 
+        "Execute locally using standard Pharo Compiler"
+        Smalltalk compiler evaluate: code.
+        self inform: 'Local DoIt: Executed'.
+    ] on: Error do: [ :ex | self inform: 'Local Error: ', ex messageText ].
+]
+
+{ #category : 'local actions' }
+GbsWorkspace >> localInspectIt [
+    | code result |
+    code := self selectedCodeOrAll.
+    code ifEmpty: [ ^ self ].
+
+    [ 
+        result := Smalltalk compiler evaluate: code.
+        result inspect.
+    ] on: Error do: [ :ex | self inform: 'Local Error: ', ex messageText ].
+]
+
+{ #category : 'local actions' }
+GbsWorkspace >> localPrintIt [
+    | code result |
+    code := self selectedCodeOrAll.
+    code ifEmpty: [ ^ self ].
+
+    [ 
+        result := Smalltalk compiler evaluate: code.
+        "Use our manual insertion helper"
+        self insertResult: result printString.
+    ] on: Error do: [ :ex | self inform: 'Local Error: ', ex messageText ].
+]
+
+{ #category : 'private' }
+GbsWorkspace >> replaceSelectionWith: aString [
+    | text selectionInterval newText |
+    text := textEditor text asString.
+    selectionInterval := textEditor selectionInterval.
+    
+    newText := (text copyFrom: 1 to: selectionInterval first - 1), 
+               aString, 
+               (text copyFrom: selectionInterval last + 1 to: text size).
+               
+    textEditor text: newText.
+    "Move cursor to end of inserted text"
+    textEditor selectionInterval: (selectionInterval first + aString size to: selectionInterval first + aString size - 1).
+]
+
+{ #category : 'private' }
+GbsWorkspace >> selectedCodeOrAll [
+    | code |
+    code := textEditor selectedText.
+    code ifEmpty: [ code := textEditor text ].
+    ^ code
+]
+
+{ #category : 'private' }
+GbsWorkspace >> selectedText [
+    ^ textEditor selectedText
+]
+
 { #category : 'layout' }
 GbsWorkspace >> staticLayout [
     ^ SpBoxLayout newVertical
         add: textEditor;
         yourself
+]
+
+{ #category : 'menus' }
+GbsWorkspace >> workspaceMenu [
+    | menu |
+    menu := self newMenu.
+    
+    "--- GEMSTONE ACTIONS ---"
+    menu addGroup: [ :group |
+        group addItem: [ :item | item name: 'GemStone Do it'; shortcut: $d command; icon: (self iconNamed: #smallDoIt); action: [ self doIt ] ].
+        group addItem: [ :item | item name: 'GemStone Inspect it'; shortcut: $i command; icon: (self iconNamed: #smallInspectIt); action: [ self inspectIt ] ].
+        group addItem: [ :item | item name: 'GemStone Print it'; shortcut: $p command; icon: (self iconNamed: #smallPrintIt); action: [ self gemStonePrintIt ] ].
+        
+        "Debug It now calls the specific method"
+        group addItem: [ :item | item 
+            name: 'GemStone Debug it'; 
+            icon: (self iconNamed: #smallDebug); 
+            action: [ self gemStoneDebugIt ] ].
+    ].
+
+    "--- EDITING ---"
+    menu addGroup: [ :group |
+        group addItem: [ :item | item name: 'Copy'; shortcut: $c command; icon: (self iconNamed: #smallCopy); action: [ Clipboard clipboardText: self selectedText ] ].
+        group addItem: [ :item | item name: 'Cut'; shortcut: $x command; icon: (self iconNamed: #smallCut); action: [ Clipboard clipboardText: self selectedText. self replaceSelectionWith: ''. ] ].
+        group addItem: [ :item | item name: 'Paste'; shortcut: $v command; icon: (self iconNamed: #smallPaste); action: [ self replaceSelectionWith: Clipboard clipboardText ] ].
+    ].
+
+    "--- LOCAL ACTIONS ---"
+    menu addGroup: [ :group |
+        group addItem: [ :item | item name: 'Local Do it'; icon: (self iconNamed: #smallDoIt); action: [ self localDoIt ] ].
+        group addItem: [ :item | item name: 'Local Inspect it'; icon: (self iconNamed: #smallInspectIt); action: [ self localInspectIt ] ].
+        group addItem: [ :item | item name: 'Local Print it'; icon: (self iconNamed: #smallPrintIt); action: [ self localPrintIt ] ].
+        
+        "Debug It now calls the specific method"
+        group addItem: [ :item | item 
+            name: 'Local Debug it'; 
+            icon: (self iconNamed: #smallDebug); 
+            action: [ self localDebugIt ] ].
+    ].
+    
+    ^ menu
 ]
