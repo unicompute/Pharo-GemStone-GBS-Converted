@@ -1,22 +1,17 @@
 Class {
 	#name : 'GbsError',
-	#superclass : 'Object',
+	#superclass : 'Error',
 	#instVars : [
-		'arguments',
-		'category',
-		'deferProcessing',
-		'dontRaise',
-		'errorText',
-		'exceptionOop',
-		'fatal',
-		'gsResult',
-		'number',
-		'process',
-		'reason',
-		'session',
-		'stepLevel',
-		'terminateOnUnwind'
+		'gemStoneExceptionProxy'
 	],
 	#category : 'GemStone-GBS-Converted',
 	#package : 'GemStone-GBS-Converted'
 }
+
+{ #category : 'accessing' }
+GbsError >> gemStoneExceptionProxy [ ^ gemStoneExceptionProxy
+]
+
+{ #category : 'accessing' }
+GbsError >> gemStoneExceptionProxy: p [ gemStoneExceptionProxy := p
+]

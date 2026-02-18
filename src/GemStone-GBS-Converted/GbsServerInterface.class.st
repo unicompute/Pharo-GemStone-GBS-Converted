@@ -1,12 +1,19 @@
 Class {
 	#name : 'GbsServerInterface',
-	#superclass : 'FFILibrary',
+	#superclass : 'Object',
 	#instVars : [
 		'libraryPath'
+	],
+	#classInstVars : [
+		'UniqueInstance'
 	],
 	#category : 'GemStone-GBS-Converted',
 	#package : 'GemStone-GBS-Converted'
 }
+
+{ #category : 'as yet unclassified' }
+GbsServerInterface class >> initialize [ UniqueInstance := nil
+]
 
 { #category : 'initialization' }
 GbsServerInterface class >> reset [
@@ -14,11 +21,23 @@ GbsServerInterface class >> reset [
     uniqueInstance := nil
 ]
 
+{ #category : 'accessing' }
+GbsServerInterface class >> uniqueInstance [ ^ UniqueInstance ifNil: [ UniqueInstance := self new ]
+]
+
+{ #category : 'api' }
+GbsServerInterface >> apiGciAbort [ ^ self ffiCall: #(void GciAbort())
+]
+
 { #category : 'api - session' }
 GbsServerInterface >> apiGciAbort: aSessionId [
     <primitive: #primitiveNativeCall error: errorCode>
     ^ self ffiCall: #(void GciAbort(uint64 aSessionId))
         module: libraryPath
+]
+
+{ #category : 'api' }
+GbsServerInterface >> apiGciCommit [ ^ self ffiCall: #(int GciCommit())
 ]
 
 { #category : 'api - session' }
@@ -42,18 +61,22 @@ GbsServerInterface >> apiGciEncrypt: aString into: aBuffer [
     ^ self ffiCall: #(char* GciEncrypt(char* aString, void* aBuffer, int64 1024))
 ]
 
-{ #category : 'api - errors' }
-GbsServerInterface >> apiGciErr: errorBuffer [
-    <primitive: #primitiveNativeCall error: errorCode>
-    ^ self ffiCall: #(bool GciErr(void* errorBuffer))
-        module: '/Users/tariq/GemStone64Bit3.7.4.3-arm64.Darwin/lib/libgcirpc-3.7.4.3-64.dylib'
-        options: #(+ optNonThreaded)
+{ #category : 'api' }
+GbsServerInterface >> apiGciEncrypt: s into: b size: z [ ^ self ffiCall: #(void* GciEncrypt(String s, void* b, void* z))
+]
+
+{ #category : 'api' }
+GbsServerInterface >> apiGciErr: p [ ^ self ffiCall: #(int GciErr(void* p))
 ]
 
 { #category : 'api - execution' }
 GbsServerInterface >> apiGciExecute: aString context: aContext [
     <primitive: #primitiveNativeCall error: errorCode>
     ^ self ffiCall: #(int64 GciExecuteStr(char* aString, int64 aContext))
+]
+
+{ #category : 'api' }
+GbsServerInterface >> apiGciExecuteStr: s context: c [ ^ self ffiCall: #(void* GciExecuteStr(String s, void* c))
 ]
 
 { #category : 'api - fetching' }
@@ -70,10 +93,8 @@ GbsServerInterface >> apiGciFetchChars: anOop into: aBuffer [
         module: libraryPath
 ]
 
-{ #category : 'api - fetching' }
-GbsServerInterface >> apiGciFetchChars: anOop startingAt: startIndex into: aBuffer size: bufferSize [
-    <primitive: #primitiveNativeCall error: errorCode>
-    ^ self ffiCall: #(int64 GciFetchChars_(int64 anOop, int64 startIndex, void* aBuffer, int64 bufferSize))
+{ #category : 'api' }
+GbsServerInterface >> apiGciFetchChars: o startingAt: i into: b size: s [ ^ self ffiCall: #(void* GciFetchChars_(void* o, void* i, void* b, void* s))
 ]
 
 { #category : 'api - fetching' }
@@ -82,24 +103,16 @@ GbsServerInterface >> apiGciFetchOops: anOop startingAt: startIndex into: aBuffe
     ^ self ffiCall: #(int64 GciFetchOops(int64 anOop, int64 startIndex, void* aBuffer, int64 numOops))
 ]
 
-{ #category : 'api - fetching' }
-GbsServerInterface >> apiGciFetchSize: anOop [
-    <primitive: #primitiveNativeCall error: errorCode>
-    ^ self ffiCall: #(int64 GciFetchSize_(int64 anOop))
+{ #category : 'api' }
+GbsServerInterface >> apiGciFetchSize: o [ ^ self ffiCall: #(void* GciFetchSize_(void* o))
 ]
 
-{ #category : 'api - init' }
-GbsServerInterface >> apiGciInit [
-    <primitive: #primitiveNativeCall error: errorCode>
-    ^ self ffiCall: #(void GciInit(void))
-        module: '/Users/tariq/GemStone64Bit3.7.4.3-arm64.Darwin/lib/libgcirpc-3.7.4.3-64.dylib'
-        options: #(+ optNonThreaded)
+{ #category : 'api' }
+GbsServerInterface >> apiGciInit [ ^ self ffiCall: #(int GciInit())
 ]
 
-{ #category : 'api - structural' }
-GbsServerInterface >> apiGciIsKindOfClass: anOop isKindOf: aClassOop [
-    <primitive: #primitiveNativeCall error: errorCode>
-    ^ self ffiCall: #(bool GciIsKindOfClass(int64 anOop, int64 aClassOop))
+{ #category : 'api' }
+GbsServerInterface >> apiGciIsKindOfClass: o isKindOf: c [ ^ self ffiCall: #(int GciIsKindOfClass(void* o, void* c))
 ]
 
 { #category : 'api - login' }
@@ -117,6 +130,10 @@ GbsServerInterface >> apiGciLoginEx: user pass: password flags: flags context: c
     ^ self ffiCall: #(bool GciLoginEx(char* user, char* password, int flags, int64 context))
 ]
 
+{ #category : 'api' }
+GbsServerInterface >> apiGciLoginEx: u password: p flags: f context: c [ ^ self ffiCall: #(int GciLoginEx(void* u, void* p, int f, void* c))
+]
+
 { #category : 'api - login' }
 GbsServerInterface >> apiGciLoginEx: gemService user: userId pass: password [
     <primitive: #primitiveNativeCall error: errorCode>
@@ -132,16 +149,18 @@ GbsServerInterface >> apiGciLoginEx: gemService user: userId pass: password [
         options: #(+ optNonThreaded)
 ]
 
+{ #category : 'api' }
+GbsServerInterface >> apiGciLogout [ ^ self ffiCall: #(int GciLogout())
+]
+
 { #category : 'api - login' }
 GbsServerInterface >> apiGciLogout: sessionId [
     <primitive: #primitiveNativeCall error: errorCode>
     ^ self ffiCall: #(bool GciLogout(int sessionId))
 ]
 
-{ #category : 'api - connection' }
-GbsServerInterface >> apiGciSetNet: stoneName host: hostName net: netName service: serviceName [
-    <primitive: #primitiveNativeCall error: errorCode>
-    ^ self ffiCall: #(void GciSetNet(char* stoneName, char* hostName, char* netName, char* serviceName))
+{ #category : 'api' }
+GbsServerInterface >> apiGciSetNet: st host: h net: n service: s [ ^ self ffiCall: #(void GciSetNet(void* st, void* h, void* n, void* s))
 ]
 
 { #category : 'api - login' }
@@ -162,6 +181,20 @@ GbsServerInterface >> apiGciTsVersion [
     <primitive: #primitiveNativeCall error: errorCode>
     ^ self ffiCall: #(char* GciTsVersion())
         module: libraryPath
+]
+
+{ #category : 'error handling' }
+GbsServerInterface >> checkError [
+    | errInfo result exOop |
+    errInfo := GciErrSType new.
+    result := self apiGciErr: errInfo getHandle.
+    result = 1 ifTrue: [ 
+        exOop := errInfo exceptionOop.
+        GbsError new 
+            messageText: ('GemStone Error: ', errInfo message);
+            gemStoneExceptionProxy: (GbsProxy new oop: exOop session: GbsSessionParameters currentSession);
+            signal
+    ].
 ]
 
 { #category : 'as yet unclassified' }
@@ -189,6 +222,10 @@ GbsServerInterface >> checkGciError: anInterface [
           show: ( buffer + 112 ) readString
         ]
     ] ensure: [ buffer free ]
+]
+
+{ #category : 'ffi-binding' }
+GbsServerInterface >> ffiLibraryName [ ^ libraryPath
 ]
 
 { #category : 'GemStone-GBS-Converted' }
@@ -221,13 +258,11 @@ GbsServerInterface >> libraryName: aString [
 ]
 
 { #category : 'accessing' }
-GbsServerInterface >> libraryPath [
-    ^ libraryPath
+GbsServerInterface >> libraryPath [ ^ libraryPath
 ]
 
 { #category : 'accessing' }
-GbsServerInterface >> libraryPath: aString [
-    libraryPath := aString
+GbsServerInterface >> libraryPath: s [ libraryPath := s
 ]
 
 { #category : 'debugging' }

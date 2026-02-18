@@ -1,6 +1,6 @@
 Class {
-	#name : 'GbsSessionWithStats',
-	#superclass : 'AnObsoleteGbsSession',
+	#name : 'AnObsoleteGbsSession',
+	#superclass : 'Object',
 	#category : 'GemStone-GBS-Converted',
 	#package : 'GemStone-GBS-Converted'
 }

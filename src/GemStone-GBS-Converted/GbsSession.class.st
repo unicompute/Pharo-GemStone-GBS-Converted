@@ -2,39 +2,8 @@ Class {
 	#name : 'GbsSession',
 	#superclass : 'Object',
 	#instVars : [
-		'activeInteractions',
-		'causeOfDeath',
-		'clientTimeZone',
-		'configuration',
-		'dependents',
-		'dirtyPool',
-		'eventHandlers',
-		'eventDetectorErrorHandler',
-		'freeOops',
-		'gbsm',
-		'gemTimeZone',
-		'gsClassOrganizer',
-		'isRemote',
-		'isUnwindingAsyncAbort',
-		'nestingLevel',
-		'notCachedToken',
-		'parameters',
-		'procBalancer',
-		'replicatorManager',
-		'serverInterface',
-		'serverMap',
-		'sessionDisplayString',
-		'sessionId',
-		'sessionProtect',
-		'specialConverter',
-		'stats',
-		'asyncAbortStartAction',
-		'asyncAbortFinishAction',
-		'loginTimestamp',
-		'logoutTimestamp',
-		'gemProcessId',
-		'gemSerialNumber',
-		'gemSessionId'
+		'sessionOop',
+		'parameters'
 	],
 	#category : 'GemStone-GBS-Converted',
 	#package : 'GemStone-GBS-Converted'
@@ -67,18 +36,11 @@ GbsSession >> abort [
 ]
 
 { #category : 'transactions' }
-GbsSession >> commit [
-    ^ serverInterface apiGciCommit: sessionId
+GbsSession >> commit [ GbsServerInterface uniqueInstance apiGciCommit = 1 ifFalse: [ GbsServerInterface uniqueInstance checkError ]
 ]
 
-{ #category : 'actions' }
-GbsSession >> evaluate: aString [
-    | rawOop |
-    "1. Execute code on Server"
-    rawOop := GbsServerInterface uniqueInstance apiGciExecute: aString context: 20.
-    
-    "2. Decode the result"
-    ^ self fetchObject: rawOop
+{ #category : 'execution' }
+GbsSession >> evaluate: s [ | i r | i := GbsServerInterface uniqueInstance. r := i apiGciExecuteStr: s context: 20. i checkError. ^ self fetchObject: r asInteger
 ]
 
 { #category : 'execution' }
@@ -133,69 +95,62 @@ GbsSession >> execute: aString [
 
 { #category : 'marshaling' }
 GbsSession >> fetchObject: anOop [
-    | interface size buffer string arr elemOop tag isString isArray |
-    
-    "1. Handle SmallIntegers"
-    tag := anOop bitAnd: 7.
-    tag = 2 ifTrue: [ ^ (anOop bitShift: -3) ].
+    | i szPtr sz buf str classOop |
+    "1. Literal / Immediate Checks"
+    anOop = 20 ifTrue: [ ^ nil ]. 
+    anOop = 268 ifTrue: [ ^ true ]. 
+    anOop = 12 ifTrue: [ ^ false ]. 
+    (anOop bitAnd: 7) = 2 ifTrue: [ ^ (anOop bitShift: -3) ]. "SmallInteger"
 
-    "2. Handle Special Constants"
-    anOop = 20  ifTrue: [ ^ nil ].
-    anOop = 268 ifTrue: [ ^ true ].
-    anOop = 12  ifTrue: [ ^ false ].
+    i := GbsServerInterface uniqueInstance.
 
-    interface := GbsServerInterface uniqueInstance.
-
-    "3. CHECK IF STRING (Class Oop: 74753)"
-    isString := interface apiGciIsKindOfClass: anOop isKindOf: 74753.
-    
-    isString ifTrue: [
-        size := interface apiGciFetchSize: anOop.
-        size = 0 ifTrue: [ ^ '' ].
-        
-        buffer := ExternalAddress allocate: size + 1.
-        [
-            interface apiGciFetchChars: anOop startingAt: 1 into: buffer size: size + 1.
-            string := String new: size.
-            1 to: size do: [ :i | 
-                string at: i put: (buffer unsignedByteAt: i) asCharacter 
-            ].
-        ] ensure: [ buffer free ].
-        ^ string
+    "2. String Check (Class 74753)"
+    (i apiGciIsKindOfClass: anOop isKindOf: 74753) = 1 ifTrue: [
+        szPtr := i apiGciFetchSize: anOop.
+        sz := szPtr asInteger. (sz <= 0) ifTrue: [ ^ '' ].
+        buf := ExternalAddress allocate: sz + 1.
+        [ i apiGciFetchChars: anOop startingAt: 1 into: buf size: sz + 1. 
+          str := String new: sz. 
+          1 to: sz do: [ :x | str at: x put: (buf unsignedByteAt: x) asCharacter ]. 
+        ] ensure: [ buf free ].
+        ^ str 
     ].
 
-    "4. CHECK IF ARRAY (Class Oop: 66817)"
-    isArray := interface apiGciIsKindOfClass: anOop isKindOf: 66817.
-    
-    isArray ifTrue: [
-        size := interface apiGciFetchSize: anOop.
-        size = 0 ifTrue: [ ^ #() ].
-
-        "Allocate buffer for 'size' number of 64-bit Oops (8 bytes each)"
-        buffer := ExternalAddress allocate: (size * 8).
-        [
-            "Fetch the Oops directly into the buffer"
-            interface apiGciFetchOops: anOop startingAt: 1 into: buffer size: size.
-            
-            arr := Array new: size.
-            1 to: size do: [ :i |
-                "Read the Oop at index i (pointer arithmetic)"
-                elemOop := buffer unsignedLongLongAt: ((i - 1) * 8) + 1.
-                
-                "Recursively decode the element"
-                arr at: i put: (self fetchObject: elemOop).
-            ].
-        ] ensure: [ buffer free ].
-        ^ arr
+    "3. DateTime Marshaling"
+    "We ask GemStone for the ISO string and convert it to a Pharo DateAndTime"
+    (i apiGciIsKindOfClass: anOop isKindOf: 74241) = 1 ifTrue: [
+        str := self evaluate: '(Object _objectForOop: ', anOop printString, ') asString'.
+        ^ DateAndTime readFrom: str readStream.
     ].
 
-    "5. Fallback"
-    ^ '[Oop: ', anOop printString, ']'
+    "4. Array Marshaling (Recursive)"
+    "If it is a small Array, we convert it to a Pharo Array of objects/proxies"
+    (i apiGciIsKindOfClass: anOop isKindOf: 66817) = 1 ifTrue: [
+        szPtr := i apiGciFetchSize: anOop.
+        sz := szPtr asInteger.
+        "Only auto-marshal small arrays (< 100 elements) to avoid freezing Pharo"
+        (sz > 0 and: [ sz < 100 ]) ifTrue: [ | localArray |
+            localArray := Array new: sz.
+            1 to: sz do: [ :idx | | elementOop |
+                "We use a specialized GCI call to get the OOP at index"
+                "For now, we evaluate a quick script for simplicity"
+                elementOop := self evaluate: '(Object _objectForOop: ', anOop printString, ') at: ', idx printString.
+                localArray at: idx put: elementOop.
+            ].
+            ^ localArray
+        ].
+    ].
+
+    "Default: Return a Proxy"
+    ^ GbsProxy new oop: anOop session: self
 ]
 
 { #category : 'actions' }
-GbsSession >> logout [
-    GbsServerInterface uniqueInstance apiGciLogout: sessionId
+GbsSession >> logout [ sessionOop ifNotNil: [ GbsServerInterface uniqueInstance apiGciLogout. sessionOop := nil ]
+]
+
+{ #category : 'accessing' }
+GbsSession >> parameters: p [ parameters := p. GbsSessionParameters classPool at: #CurrentSession put: self
 ]
 
 { #category : 'accessing' }
@@ -204,4 +159,8 @@ GbsSession >> sessionId [ ^ sessionId
 
 { #category : 'accessing' }
 GbsSession >> sessionId: anInteger [ sessionId := anInteger
+]
+
+{ #category : 'accessing' }
+GbsSession >> sessionOop: i [ sessionOop := i
 ]
