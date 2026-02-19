@@ -221,7 +221,18 @@ GbsClassicLauncher >> doLoginRpc [
 { #category : 'actions' }
 GbsClassicLauncher >> doLogout [
     sessionList selection selectedItem ifNotNil: [ :session |
+        "1. Unselect first to prevent SubscriptOutOfBounds in Spec2"
+        sessionList unselectAll.
+        
+        "2. Perform the logout"
         session logout.
+        
+        "3. Clear global current session if it matches"
+        GbsSessionParameters currentSession == session ifTrue: [
+            GbsSessionParameters currentSession: nil.
+        ].
+        
+        "4. Refresh the UI"
         self refreshAll.
     ].
 ]
@@ -229,7 +240,7 @@ GbsClassicLauncher >> doLogout [
 { #category : 'initialization' }
 GbsClassicLauncher >> initializePresenters [
     mainMenu := self buildMenuBar.
-
+    
     "Lists"
     parametersList := self newTable.
     parametersList addColumn: (SpStringTableColumn title: 'Name' evaluated: #name).
@@ -243,17 +254,8 @@ GbsClassicLauncher >> initializePresenters [
     sessionList beSingleSelection.
 
     "Buttons"
-    "UPDATED: Map Login Link to the RPC login logic"
-    btnLoginLink := self newButton 
-        label: 'Login Link'; 
-        icon: (self iconNamed: #glamorousGo); 
-        action: [ self doLoginRpc ].
-    
-    btnLoginRpc  := self newButton 
-        label: 'Login RPC'; 
-        icon: (self iconNamed: #glamorousGo); 
-        action: [ self doLoginRpc ].
-    
+    btnLoginLink := self newButton label: 'Login Link'; icon: (self iconNamed: #glamorousGo); action: [ self doLoginRpc ].
+    btnLoginRpc  := self newButton label: 'Login RPC'; icon: (self iconNamed: #glamorousGo); action: [ self doLoginRpc ].
     btnAdd       := self newButton label: 'Add...'; icon: (self iconNamed: #add); action: [ self doAddParameter ].
     btnCopy      := self newButton label: 'Copy'; icon: (self iconNamed: #smallCopy); action: [ self doCopyParameter ].
     btnEdit      := self newButton label: 'Edit...'; icon: (self iconNamed: #edit); action: [ self doEditParameter ].
@@ -265,6 +267,10 @@ GbsClassicLauncher >> initializePresenters [
     btnCurrent:= self newButton label: 'Current'; icon: (self iconNamed: #smallForward); action: [ self makeCurrent ].
     btnBegin  := self newButton label: 'Begin'; icon: (self iconNamed: #smallUpdate); action: [ self doBegin ].
     btnBreak  := self newButton label: 'Break'; icon: (self iconNamed: #smallCancel); action: [ self doBreak ].
+
+    "--> THE MAGIC: Wire up the click events to update button states <--"
+    parametersList whenSelectionChangedDo: [ :selection | self updateButtonStates ].
+    sessionList whenSelectionChangedDo: [ :selection | self updateButtonStates ].
 
     self refreshAll.
 ]
@@ -321,10 +327,12 @@ GbsClassicLauncher >> menuTools [
             action: [ GbsWorkspace new open ] ];
         addItem: [ :item | 
             item name: 'Transcript'; 
-            action: [ | t | 
-                t := GbsRemoteTranscript new. 
-                t open. 
-                t startPolling "Fixed: Calling on the presenter, not the window" ] ];
+            action: [ 
+                | transcriptPresenter |
+                transcriptPresenter := GbsRemoteTranscript new.
+                transcriptPresenter open.
+                transcriptPresenter startPolling.
+            ] ];
         yourself.
 ]
 
@@ -338,14 +346,18 @@ GbsClassicLauncher >> menuWindow [
 
 { #category : 'actions' }
 GbsClassicLauncher >> refreshAll [
-	"Get parameters and sessions from the shared registry"
-	parametersList items: GbsSessionParameters allParameters.
-	sessionList items: GbsSessionParameters allSessions.
-	
-	"Update the selection if a current session exists"
-	GbsSessionParameters currentSession ifNotNil: [ :current |
-		sessionList selectItem: current
-	].
+    "Use asArray so Spec2 sees a NEW collection and forces a visual refresh"
+    parametersList items: GbsSessionParameters allParameters asArray.
+    sessionList items: GbsSessionParameters allSessions asArray.
+    
+    "Safely re-select the current session if it still exists"
+    GbsSessionParameters currentSession ifNotNil: [ :current |
+        (GbsSessionParameters allSessions includes: current) ifTrue: [ 
+            sessionList selectItem: current 
+        ]
+    ].
+    
+    self updateButtonStates.
 ]
 
 { #category : 'actions' }
@@ -353,6 +365,36 @@ GbsClassicLauncher >> refreshSessionList [
     sessionList items: GbsSessionParameters allSessions.
     parametersList items: GbsSessionParameters allParameters. "Assuming this collection exists"
     GbsSessionParameters currentSession ifNotNil: [ :s | sessionList selectItem: s ].
+]
+
+{ #category : 'actions' }
+GbsClassicLauncher >> updateButtonStates [
+    | selectedParam selectedSession |
+    
+    selectedParam := parametersList selection selectedItem.
+    selectedSession := sessionList selection selectedItem.
+
+    "1. Login buttons: Enable only if a parameter is selected AND it is NOT connected"
+    (selectedParam notNil and: [ selectedParam isConnected not ])
+        ifTrue: [ 
+            btnLoginRpc enable. 
+            btnLoginLink enable. 
+        ]
+        ifFalse: [ 
+            btnLoginRpc disable. 
+            btnLoginLink disable. 
+        ].
+
+    "2. Session buttons (Logout, Commit, etc.): Enable only if an active session is selected"
+    selectedSession notNil
+        ifTrue: [ 
+            btnLogout enable. btnCommit enable. btnAbort enable. 
+            btnCurrent enable. btnBegin enable. btnBreak enable. 
+        ]
+        ifFalse: [ 
+            btnLogout disable. btnCommit disable. btnAbort disable. 
+            btnCurrent disable. btnBegin disable. btnBreak disable. 
+        ].
 ]
 
 { #category : 'private' }

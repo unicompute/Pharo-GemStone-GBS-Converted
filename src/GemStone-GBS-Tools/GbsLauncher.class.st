@@ -52,44 +52,50 @@ GbsLauncher >> defaultLayout [
 GbsLauncher >> doLogin [
     | session |
     statusLabel label: 'Status: Connecting...'.
-    
     [
-        "1. Set Library"
         GbsServerInterface uniqueInstance libraryPath: inputLibPath text.
         
-        "2. Attempt Login"
         session := GbsSessionParameters new
+            name: 'Simple Launcher Session';
             gemStoneName: inputStone text;
             username: inputUser text;
             password: inputPass text;
             login.
-            
-        "3. UI Update on Success"
-        statusLabel label: 'Status: Connected to ', inputStone text.
-        btnLogin disable. 
-        inputStone disable. inputUser disable. inputPass disable. inputLibPath disable.
-        btnLogout enable.
-        btnWorkspace enable. btnBrowser enable. btnTranscript enable.
+                    
+        GbsSessionParameters currentSession: session.
+        
+        "Sync ALL open Simple Launchers and Classic Launchers safely"
+        UIManager default defer: [
+            GbsLauncher allInstancesDo: [ :each | each updateUIState ].
+            GbsClassicLauncher allInstancesDo: [ :each | each refreshAll ].
+        ].
         
         self inform: 'Connected Successfully!'.
-        
+            
     ] on: Error do: [ :ex | 
-        statusLabel label: 'Status: Error - ', ex messageText.
         self inform: 'Connection Failed: ', ex messageText.
+        self updateUIState. "Reset UI on failure"
     ].
 ]
 
 { #category : 'actions' }
 GbsLauncher >> doLogout [
     [
-        GbsSessionParameters currentSession ifNotNil: [ :s | s logout ].
+        | sessionToLogout |
         
-        "UI Reset"
-        statusLabel label: 'Status: Disconnected'.
-        btnLogin enable.
-        inputStone enable. inputUser enable. inputPass enable. inputLibPath enable.
-        btnLogout disable.
-        btnWorkspace disable. btnBrowser disable. btnTranscript disable.
+        sessionToLogout := GbsSessionParameters allSessions 
+            detect: [ :each | each name = 'Simple Launcher Session' ] 
+            ifNone: [ GbsSessionParameters currentSession ].
+            
+        sessionToLogout ifNotNil: [ :s | s logout ].
+        
+        GbsSessionParameters currentSession: nil.
+        
+        "Sync ALL open Simple Launchers and Classic Launchers safely"
+        UIManager default defer: [
+            GbsLauncher allInstancesDo: [ :launcher | launcher updateUIState ].
+            GbsClassicLauncher allInstancesDo: [ :launcher | launcher refreshAll ].
+        ].
         
     ] on: Error do: [ :ex | self inform: 'Error logging out: ', ex messageText ].
 ]
@@ -100,34 +106,31 @@ GbsLauncher >> initializePresenters [
     inputStone := self newTextInput text: 'gs64stone'; placeholder: 'Stone Name'.
     inputUser := self newTextInput text: 'DataCurator'; placeholder: 'Username'.
     inputPass := self newTextInput text: 'swordfish'; placeholder: 'Password'; bePassword.
-    
-    "Default Library Path (Adjust if needed)"
     inputLibPath := self newTextInput 
         text: '/Users/tariq/GemStone64Bit3.7.4.3-arm64.Darwin/lib/libgcirpc-3.7.4.3-64.dylib';
         placeholder: 'Path to libgcirpc.dylib'.
-
+        
     "2. Action Buttons"
     btnLogin := self newButton label: 'Login'; icon: (self iconNamed: #smallOk).
-    btnLogout := self newButton label: 'Logout'; icon: (self iconNamed: #smallCancel); disable.
+    btnLogout := self newButton label: 'Logout'; icon: (self iconNamed: #smallCancel).
     
-    "3. Tool Buttons (Initially Disabled)"
-    btnWorkspace := self newButton label: 'Workspace'; icon: (self iconNamed: #glamorousEdit); disable.
-    btnBrowser := self newButton label: 'Class Browser'; icon: (self iconNamed: #glamorousBrowse); disable.
-    btnTranscript := self newButton label: 'Remote Transcript'; icon: (self iconNamed: #glamorousAlignJustify); disable.
-
+    "3. Tool Buttons"
+    btnWorkspace := self newButton label: 'Workspace'; icon: (self iconNamed: #glamorousEdit).
+    btnBrowser := self newButton label: 'Class Browser'; icon: (self iconNamed: #glamorousBrowse).
+    btnTranscript := self newButton label: 'Remote Transcript'; icon: (self iconNamed: #glamorousAlignJustify).
+    
     "4. Status"
-    statusLabel := self newLabel label: 'Status: Disconnected'.
-
+    statusLabel := self newLabel label: 'Status: Initializing...'.
+    
     "5. Event Wiring"
     btnLogin action: [ self doLogin ].
     btnLogout action: [ self doLogout ].
-    
     btnWorkspace action: [ GbsWorkspace new open ].
     btnBrowser action: [ GbsBrowser new open ].
-    btnTranscript action: [ 
-        | t | t := GbsRemoteTranscript new. 
-        t open. t startPolling. 
-    ].
+    btnTranscript action: [ | t | t := GbsRemoteTranscript new. t open. t startPolling. ].
+    
+    "6. SET INITIAL STATE"
+    self updateUIState.
 ]
 
 { #category : 'initialization' }
@@ -135,4 +138,30 @@ GbsLauncher >> initializeWindow: aWindowPresenter [
     aWindowPresenter 
         title: 'GemStone GBS Launcher';
         initialExtent: 350@400.
+]
+
+{ #category : 'updating' }
+GbsLauncher >> updateUIState [
+    | activeSession |
+    
+    "Check if our Simple Launcher Session is active globally"
+    activeSession := GbsSessionParameters allSessions
+        detect: [ :each | each name = 'Simple Launcher Session' ]
+        ifNone: [ nil ].
+
+    activeSession ifNotNil: [
+        "We are logged in: Disable login, enable tools"
+        statusLabel label: 'Status: Connected to ', activeSession gemStoneName.
+        btnLogin disable.
+        inputStone disable. inputUser disable. inputPass disable. inputLibPath disable.
+        btnLogout enable.
+        btnWorkspace enable. btnBrowser enable. btnTranscript enable.
+    ] ifNil: [
+        "We are disconnected: Enable login, disable tools"
+        statusLabel label: 'Status: Disconnected'.
+        btnLogin enable.
+        inputStone enable. inputUser enable. inputPass enable. inputLibPath enable.
+        btnLogout disable.
+        btnWorkspace disable. btnBrowser disable. btnTranscript disable.
+    ].
 ]
