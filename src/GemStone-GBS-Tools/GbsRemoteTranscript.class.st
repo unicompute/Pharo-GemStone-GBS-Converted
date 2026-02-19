@@ -9,6 +9,32 @@ Class {
 	#package : 'GemStone-GBS-Tools'
 }
 
+{ #category : 'utilities' }
+GbsRemoteTranscript class >> show: aString [
+    | transcript |
+    "Find an already open transcript, or create a new one if closed"
+    transcript := self allInstances 
+        detect: [ :each | each window isNotNil and: [ each window isOpen ] ]
+        ifNone: [ 
+            | newTrans |
+            newTrans := self new.
+            newTrans open.
+            newTrans startPolling.
+            newTrans 
+        ].
+        
+    transcript appendText: aString.
+]
+
+{ #category : 'logic' }
+GbsRemoteTranscript >> appendText: aString [
+    | currentText |
+    currentText := textPresenter text ifNil: [ '' ].
+    
+    "Append the raw text and add a carriage return"
+    textPresenter text: currentText asString, aString, String cr.
+]
+
 { #category : 'layout' }
 GbsRemoteTranscript >> defaultLayout [
     ^ SpBoxLayout newVertical add: textPresenter; yourself
@@ -16,16 +42,28 @@ GbsRemoteTranscript >> defaultLayout [
 
 { #category : 'logic' }
 GbsRemoteTranscript >> fetchLogs [
-    | logs |
-    [
-        "Call the new custom method we just installed"
-        logs := GbsSessionParameters currentSession evaluate: 'Transcript fetchAndClear'.
+    | rawResult logsString activeSession |
+    activeSession := GbsSessionParameters currentSession.
+    
+    activeSession ifNotNil: [
+        [
+            rawResult := activeSession evaluate: 'Transcript fetchAndClear'.
             
-        (logs isNotNil and: [ logs isNotEmpty ]) ifTrue: [ 
-            textPresenter text: (textPresenter text, logs).
-            textPresenter scrollToEnd.
-        ]
-    ] on: Error do: [ :ex | "Ignore polling errors" ]
+            rawResult ifNotNil: [
+                "Safely check how to unbox the string"
+                logsString := (rawResult class name = #GbsProxy) 
+                    ifTrue: [ rawResult asLocalString ] 
+                    ifFalse: [ rawResult asString ].
+                
+                (logsString isNotNil and: [ logsString trim isNotEmpty and: [ logsString trim ~= 'nil' ]]) ifTrue: [
+                     "Defer the UI update so the background thread does not crash"
+                     UIManager default defer: [
+                         textPresenter text: (textPresenter text asString, logsString).
+                     ].
+                ].
+            ].
+        ] on: Error do: [ :ex | "Ignore background thread errors" ]
+    ].
 ]
 
 { #category : 'initialization' }

@@ -132,12 +132,28 @@ GbsSessionParameters >> evaluate: aString [
         inSession: sessionId.
 ]
 
+{ #category : 'evaluating' }
+GbsSessionParameters >> evaluateAndFetchString: aString [
+    "Ask the server interface to execute the code and fetch the resulting string"
+    ^ GbsServerInterface uniqueInstance 
+        executeAndPrint: aString 
+        inSession: self sessionId.
+]
+
 { #category : 'accessing' }
 GbsSessionParameters >> extraGemArgs [ ^ extraGemArgs
 ]
 
 { #category : 'accessing' }
 GbsSessionParameters >> extraGemArgs: aValue [ extraGemArgs := aValue
+]
+
+{ #category : 'evaluating' }
+GbsSessionParameters >> fetchTranscriptLogs [
+    "Ask the server interface to fetch the active Transcript logs"
+    ^ GbsServerInterface uniqueInstance 
+        executeAndPrint: 'Transcript fetchAndClear' 
+        inSession: self sessionId.
 ]
 
 { #category : 'accessing' }

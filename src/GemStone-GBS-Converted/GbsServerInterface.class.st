@@ -107,6 +107,12 @@ GbsServerInterface >> apiGciFetchOops: anOop startingAt: startIndex into: aBuffe
 GbsServerInterface >> apiGciFetchSize: o [ ^ self ffiCall: #(void* GciFetchSize_(void* o))
 ]
 
+{ #category : 'ffi' }
+GbsServerInterface >> apiGciGetClass: anOop [
+    <primitive: #primitiveNativeCall module: #NativeBoostPlugin>
+    ^ self ffiCall: #( Oop GciGetClass ( Oop anOop ) )
+]
+
 { #category : 'api' }
 GbsServerInterface >> apiGciInit [ ^ self ffiCall: #(int GciInit())
 ]
@@ -224,6 +230,41 @@ GbsServerInterface >> checkGciError: anInterface [
     ] ensure: [ buffer free ]
 ]
 
+{ #category : 'execution' }
+GbsServerInterface >> execute: aString inSession: aSessionId [
+    "Route the workspace execution to the underlying GemStone FFI call"
+    
+    ^ self apiGciExecuteStr: aString context: aSessionId.
+]
+
+{ #category : 'execution' }
+GbsServerInterface >> executeAndPrint: aString inSession: aSessionId [
+    | stringOop |
+    "Execute and expect a String OOP back"
+    stringOop := self apiGciExecuteStr: aString context: aSessionId.
+    ^ self fetchString: stringOop.
+]
+
+{ #category : 'fetching' }
+GbsServerInterface >> fetchString: anOop [
+    | sizeResult size buffer currentSessionOop |
+    
+    sizeResult := self apiGciFetchSize: anOop.
+    size := (sizeResult isKindOf: ExternalAddress) ifTrue: [ sizeResult asInteger ] ifFalse: [ sizeResult ].
+    
+    (size <= 0) ifTrue: [ ^ '' ].
+    
+    currentSessionOop := GbsSessionParameters currentSession sessionOop.
+    
+    buffer := ByteArray new: size.
+    self apiGciFetchChars: anOop 
+         context: currentSessionOop 
+         into: buffer 
+         size: size.
+         
+    ^ buffer asString.
+]
+
 { #category : 'ffi-binding' }
 GbsServerInterface >> ffiLibraryName [ ^ libraryPath
 ]
@@ -268,4 +309,27 @@ GbsServerInterface >> libraryPath: s [ libraryPath := s
 { #category : 'debugging' }
 GbsServerInterface >> logGciCall: aString [ 
     Transcript show: '[GCI] ', aString; cr
+]
+
+{ #category : 'conversion' }
+GbsServerInterface >> resultFor: anOop [
+    | classOop |
+    (anOop isNil or: [ anOop asInteger = 0 ]) ifTrue: [ ^ nil ].
+    
+    "Check for SmallInteger (bit 0 is 1)"
+    (anOop asInteger bitAnd: 1) = 1 ifTrue: [ ^ anOop asInteger >> 1 ].
+    
+    "Check for common literals like nil, true, false (Special OOPs)"
+    anOop asInteger = 20 ifTrue: [ ^ nil ].
+    anOop asInteger = 268 ifTrue: [ ^ true ].
+    anOop asInteger = 140 ifTrue: [ ^ false ].
+
+    "Get the Class of the remote object"
+    classOop := self apiGciGetClass: anOop.
+    
+    "GemStone String classes: String=74, Symbol=110, DoubleByteString=146"
+    (#(74 110 146) includes: classOop asInteger) ifTrue: [ ^ self fetchString: anOop ].
+    
+    "Otherwise, return the Proxy"
+    ^ GbsProxy for: anOop session: GbsSessionParameters currentSession.
 ]

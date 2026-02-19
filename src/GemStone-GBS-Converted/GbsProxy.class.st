@@ -9,6 +9,30 @@ Class {
 	#package : 'GemStone-GBS-Converted'
 }
 
+{ #category : 'conversion' }
+GbsProxy >> asLocalString [
+    | sizeResult size buffer contextOop |
+    
+    "Get the active session handle"
+    contextOop := self session sessionOop.
+    
+    "Ask GemStone how large this string is"
+    sizeResult := GbsServerInterface uniqueInstance apiGciFetchSize: self oop.
+    size := (sizeResult isKindOf: ExternalAddress) ifTrue: [ sizeResult asInteger ] ifFalse: [ sizeResult ].
+    
+    (size <= 0) ifTrue: [ ^ '' ].
+    
+    "Download the actual characters"
+    buffer := ByteArray new: size.
+    GbsServerInterface uniqueInstance 
+         apiGciFetchChars: self oop 
+         context: contextOop 
+         into: buffer 
+         size: size.
+         
+    ^ buffer asString.
+]
+
 { #category : 'forwarding' }
 GbsProxy >> at: k [ ^ session evaluate: '(Object _objectForOop: ', oop printString, ') at: ', k printString
 ]
@@ -80,6 +104,27 @@ GbsProxy >> fetchRemoteInstVars [
 ]
 
 { #category : 'inspection' }
+GbsProxy >> fetchRemoteState [
+    | script |
+    "Ask GemStone to reflect on the remote object and return its variables"
+    script := '| obj ws |
+    obj := Object _objectForOop: ', oop asString, '.
+    ws := WriteStream on: String new.
+    ws nextPutAll: ''[Class] : '', obj class name; cr.
+    ws nextPutAll: ''[PrintString] : '', obj printString; cr.
+    
+    obj class instVarNames doWithIndex: [ :ivName :idx |
+        | valStr |
+        valStr := [(obj instVarAt: idx) printString] on: Error do: [''<error printing>''].
+        ws nextPutAll: ivName, '' : '', valStr; cr.
+    ].
+    ws contents'.
+    
+    "Use the proxy's specific session instead of the global one!"
+    ^ session evaluateAndFetchString: script.
+]
+
+{ #category : 'inspection' }
 GbsProxy >> inspectionRemoteInstVars: aBuilder [
     <inspectorPresentationOrder: 0 title: 'GemStone InstVars'>
     
@@ -95,6 +140,29 @@ GbsProxy >> inspectionRemoteInstVars: aBuilder [
             ') asOrderedCollection
         ];
         yourself
+]
+
+{ #category : 'inspection' }
+GbsProxy >> inspectionRemoteState [
+    <inspectorPresentationOrder: 1 title: 'GemStone State'>
+    
+    | remoteData lines table |
+    "Fetch the data securely"
+    remoteData := [ self fetchRemoteState ] on: Error do: [ :ex | '[Error] : ', ex messageText ].
+    lines := remoteData substrings: String cr.
+    
+    "Build a Spec2 Table to display the Instance Variables"
+    table := SpTablePresenter new.
+    table 
+        addColumn: (SpStringTableColumn title: 'Variable' evaluated: [ :line | (line splitOn: ' : ') first trim ]);
+        addColumn: (SpStringTableColumn title: 'Value' evaluated: [ :line | 
+            | parts |
+            parts := line splitOn: ' : '.
+            parts size > 1 ifTrue: [ parts last trim ] ifFalse: [ '' ]
+        ]).
+        
+    table items: lines.
+    ^ table
 ]
 
 { #category : 'accessing' }

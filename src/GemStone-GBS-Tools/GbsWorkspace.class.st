@@ -20,34 +20,42 @@ GbsWorkspace >> defaultLayout [
 
 { #category : 'gemstone actions' }
 GbsWorkspace >> doIt [
-    "Execute on GemStone, ignore result"
     | code |
     code := self selectedCodeOrAll.
     code ifEmpty: [ ^ self ].
-    
+
     [ 
-        GbsSessionParameters currentSession evaluate: code.
+        "Wrap code in a Block to safely execute multiple statements"
+        GbsSessionParameters currentSession evaluate: '[ ', code, ' ] value'.
         self inform: 'GemStone DoIt: Executed'.
+        
     ] on: Error do: [ :ex | self inform: 'GemStone Error: ', ex messageText ].
 ]
 
 { #category : 'actions' }
 GbsWorkspace >> executeInGemStone [
     | code result |
-    code := textEditor selectedText.
-    code ifEmpty: [ code := textEditor text ].
+    code := self selectedCodeOrAll.
     code ifEmpty: [ ^ self ].
     
     [ 
-        [ 
-            result := GbsSessionParameters currentSession evaluate: code.
-            result inspect.
-        ] on: GbsError do: [ :ex | 
-            (ex messageText includesSubstring: 'session ID is invalid') 
-                ifTrue: [ self inform: 'GemStone Session expired. Please run the Login script again.' ]
-                ifFalse: [ ex pass ]
-        ]
-    ] on: Error do: [ :ex | ex pass ].
+        result := GbsSessionParameters currentSession evaluate: code.
+        result inspect.
+        
+        "Log success to transcript"
+        GbsRemoteTranscript show: 'Successfully executed: ', code.
+        
+    ] on: Error do: [ :ex | 
+        (ex messageText includesSubstring: 'session ID is invalid')
+            ifTrue: [ 
+                GbsRemoteTranscript show: 'Error: GemStone Session expired.'.
+                self inform: 'GemStone Session expired. Please run the Login script again.' 
+            ]
+            ifFalse: [ 
+                GbsRemoteTranscript show: 'Execution Error: ', ex messageText.
+                ex pass 
+            ]
+    ].
 ]
 
 { #category : 'gemstone actions' }
@@ -55,13 +63,16 @@ GbsWorkspace >> gemStoneDebugIt [
     | code |
     code := self selectedCodeOrAll.
     code ifEmpty: [ ^ self ].
-
+    
     [ 
         GbsSessionParameters currentSession evaluate: code.
         self inform: 'GemStone: Executed (No errors to debug)'.
+        GbsRemoteTranscript show: 'Debug It: Executed without errors.'.
+        
     ] on: Error do: [ :ex | 
-        "Since we lack a full Remote Debugger, we INSPECT the error 
-         to see the remote message and stack proxy."
+        "Send the error message to the transcript"
+        GbsRemoteTranscript show: 'Debug It Error caught: ', ex messageText.
+        
         ex inspect.
         self inform: 'GemStone Error caught. Inspecting exception...'.
     ].
@@ -69,20 +80,23 @@ GbsWorkspace >> gemStoneDebugIt [
 
 { #category : 'gemstone actions' }
 GbsWorkspace >> gemStonePrintIt [
-    | code result insertStr text selectionEnd newText |
+    | code rawResult stringResult text selectionEnd newText |
     code := self selectedCodeOrAll.
     code ifEmpty: [ ^ self ].
 
     [ 
-        result := GbsSessionParameters currentSession evaluate: code.
-        insertStr := ' ', result printString.
+        "Wrap code in a Block so semicolons and periods do not break the syntax"
+        rawResult := GbsSessionParameters currentSession evaluate: '[ ', code, ' ] value printString'.
         
-        "Fix: Manually insert text since insertAndSelectAfter: is missing"
+        stringResult := (rawResult class name = #GbsProxy) 
+            ifTrue: [ rawResult asLocalString ] 
+            ifFalse: [ rawResult asString ].
+        
         text := textEditor text asString.
         selectionEnd := textEditor selectionInterval last.
         
         newText := (text copyFrom: 1 to: selectionEnd), 
-                   insertStr, 
+                   ' ', stringResult, 
                    (text copyFrom: selectionEnd + 1 to: text size).
                    
         textEditor text: newText.
@@ -152,30 +166,49 @@ GbsWorkspace >> insertResult: aString [
 
 { #category : 'gemstone actions' }
 GbsWorkspace >> inspectIt [
-    | code result |
+    | code rawResult |
     code := self selectedCodeOrAll.
     code ifEmpty: [ ^ self ].
 
     [ 
-        result := GbsSessionParameters currentSession evaluate: code.
+        "Wrap code in a Block to safely execute multiple statements"
+        rawResult := GbsSessionParameters currentSession evaluate: '[ ', code, ' ] value'.
         
-        "If it is a Proxy (Remote Object), title it explicitly"
-        result class name = #GbsProxy 
-            ifTrue: [ result inspectWithLabel: 'Remote Object (Proxy)' ]
-            ifFalse: [ result inspect ]. 
-            
+        "Inspect the raw result (either a Proxy or a native Pharo object)"
+        rawResult inspect.
+        
     ] on: Error do: [ :ex | self inform: 'GemStone Error: ', ex messageText ].
 ]
 
 { #category : 'local actions' }
 GbsWorkspace >> localDebugIt [
-    | code |
+    | code method context process |
     code := self selectedCodeOrAll.
     code ifEmpty: [ ^ self ].
 
-    "We intentionally DO NOT use an error block here. 
-     This allows the standard Pharo PreDebugWindow to open on error."
-    Smalltalk compiler evaluate: code.
+    [ 
+        "1. Tell the compiler this is a headless DoIt (isScripting: true)"
+        method := Smalltalk compiler 
+            source: code;
+            isScripting: true; 
+            compile.
+            
+        "2. Create a runtime context for the method"
+        context := Context 
+            sender: nil 
+            receiver: nil 
+            method: method 
+            arguments: #().
+            
+        "3. Create a suspended process for this context"
+        process := Process 
+            forContext: context 
+            priority: Processor userSchedulingPriority.
+            
+        "4. Tell the process to open the debugger on itself"
+        process debug.
+            
+    ] on: Error do: [ :ex | self inform: 'Pharo Local Error: ', ex messageText ].
 ]
 
 { #category : 'local actions' }

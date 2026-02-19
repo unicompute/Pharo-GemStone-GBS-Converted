@@ -35,12 +35,36 @@ GbsSession >> abort [
     ^ serverInterface apiGciAbort: sessionId
 ]
 
+{ #category : 'evaluating' }
+GbsSession >> basicEvaluate: aString [
+    | resultOop |
+    "Execute and get the raw OOP" 
+    resultOop := GbsServerInterface uniqueInstance 
+        apiGciExecuteStr: aString 
+        context: sessionOop. 
+    
+    "Crucial: Convert the raw resultOop into a Pharo object or Proxy"
+    ^ GbsServerInterface uniqueInstance resultFor: resultOop.
+]
+
 { #category : 'transactions' }
 GbsSession >> commit [ GbsServerInterface uniqueInstance apiGciCommit = 1 ifFalse: [ GbsServerInterface uniqueInstance checkError ]
 ]
 
 { #category : 'execution' }
 GbsSession >> evaluate: s [ | i r | i := GbsServerInterface uniqueInstance. r := i apiGciExecuteStr: s context: 20. i checkError. ^ self fetchObject: r asInteger
+]
+
+{ #category : 'evaluating' }
+GbsSession >> evaluateAndFetchString: aString [
+    | resultOop |
+    "Execute on server"
+    resultOop := GbsServerInterface uniqueInstance 
+        apiGciExecuteStr: aString 
+        context: sessionOop.
+        
+    "Fetch the actual characters using the fixed fetcher"
+    ^ GbsServerInterface uniqueInstance fetchString: resultOop.
 ]
 
 { #category : 'execution' }
@@ -143,6 +167,19 @@ GbsSession >> fetchObject: anOop [
 
     "Default: Return a Proxy"
     ^ GbsProxy new oop: anOop session: self
+]
+
+{ #category : 'evaluating' }
+GbsSession >> fetchTranscriptLogs [
+    ^ GbsServerInterface uniqueInstance 
+        executeAndPrint: 'Transcript fetchAndClear' 
+        inSession: sessionOop.
+]
+
+{ #category : 'testing' }
+GbsSession >> isConnected [
+    "In GBS, if we have a sessionOop, we are connected"
+    ^ sessionOop isNotNil and: [ sessionOop asInteger ~= 0 ]
 ]
 
 { #category : 'actions' }
