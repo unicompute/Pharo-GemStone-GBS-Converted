@@ -9,6 +9,14 @@ Class {
 	#package : 'GemStone-GBS-Converted'
 }
 
+{ #category : 'instance creation' }
+GbsProxy class >> for: anOop session: aSession [
+	^ self new
+		oop: anOop;
+		session: aSession;
+		yourself
+]
+
 { #category : 'conversion' }
 GbsProxy >> asLocalString [
     | sizeResult size buffer contextOop |
@@ -179,12 +187,32 @@ GbsProxy >> inspectorTitle [
 GbsProxy >> keys [ ^ session evaluate: '(Object _objectForOop: ', oop printString, ') keys'
 ]
 
+{ #category : 'accessing' }
+GbsProxy >> oop [
+    ^ oop
+]
+
+{ #category : 'accessing' }
+GbsProxy >> oop: anObject [
+	oop := anObject
+]
+
 { #category : 'initialization' }
 GbsProxy >> oop: o session: s [ oop := o. session := s.
 ]
 
 { #category : 'printing' }
 GbsProxy >> printOn: s [ | remote | [ remote := session evaluate: '(Object _objectForOop: ', oop printString, ') printString'. s nextPutAll: remote ] on: Error do: [ s nextPutAll: 'GbsProxy(', oop printString, ')' ]
+]
+
+{ #category : 'accessing' }
+GbsProxy >> session [
+    ^ session
+]
+
+{ #category : 'accessing' }
+GbsProxy >> session: anObject [
+	session := anObject
 ]
 
 { #category : 'forwarding' }

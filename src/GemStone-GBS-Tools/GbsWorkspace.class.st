@@ -284,6 +284,11 @@ GbsWorkspace >> staticLayout [
         yourself
 ]
 
+{ #category : 'accessing' }
+GbsWorkspace >> textEditor [
+	^ textEditor
+]
+
 { #category : 'menus' }
 GbsWorkspace >> workspaceMenu [
     | menu |

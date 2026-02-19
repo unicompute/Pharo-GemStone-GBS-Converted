@@ -109,8 +109,9 @@ GbsServerInterface >> apiGciFetchSize: o [ ^ self ffiCall: #(void* GciFetchSize_
 
 { #category : 'ffi' }
 GbsServerInterface >> apiGciGetClass: anOop [
-    <primitive: #primitiveNativeCall module: #NativeBoostPlugin>
-    ^ self ffiCall: #( Oop GciGetClass ( Oop anOop ) )
+    "Fetch the Class OOP of a remote object"
+    ^ self ffiCall: #( uint64 GciFetchClass ( uint64 anOop ) ) 
+           module: libraryPath
 ]
 
 { #category : 'api' }
@@ -119,6 +120,12 @@ GbsServerInterface >> apiGciInit [ ^ self ffiCall: #(int GciInit())
 
 { #category : 'api' }
 GbsServerInterface >> apiGciIsKindOfClass: o isKindOf: c [ ^ self ffiCall: #(int GciIsKindOfClass(void* o, void* c))
+]
+
+{ #category : 'ffi' }
+GbsServerInterface >> apiGciIsString: anOop [
+    ^ self ffiCall: #( bool GciIsString ( uint64 anOop ) ) 
+           module: libraryPath
 ]
 
 { #category : 'api - login' }
