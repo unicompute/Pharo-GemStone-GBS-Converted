@@ -58,29 +58,50 @@ GbsClassicLauncher >> buildMenuBar [
 
 { #category : 'layout' }
 GbsClassicLauncher >> defaultLayout [
-    ^ SpBoxLayout newVertical
-        add: mainMenu height: self class toolbarHeight;
-        add: (SpPanedLayout newVertical
-            positionOfSlider: 0.45;
-            add: (SpBoxLayout newVertical 
-                    add: 'Session Parameters' expand: false;
-                    add: parametersList;
-                    yourself);
-            add: (SpBoxLayout newVertical 
-                    add: 'Active Sessions' expand: false;
-                    add: sessionList;
-                    yourself);
-            yourself);
-        add: (SpBoxLayout newHorizontal "Row 1 Buttons"
-                spacing: 2;
-                add: btnLoginLink; add: btnLoginRpc; add: btnAdd; 
-                add: btnCopy; add: btnEdit; add: btnDelete;
-                yourself) height: 32;
-        add: (SpBoxLayout newHorizontal "Row 2 Buttons"
-                spacing: 2;
-                add: btnCommit; add: btnLogout; add: btnAbort; 
-                add: btnCurrent; add: btnBegin; add: btnBreak;
-                yourself) height: 32;
+    | topButtons bottomButtons topHalf bottomHalf |
+    
+    "1. Group the upper buttons together"
+    topButtons := SpBoxLayout newLeftToRight
+        add: btnLoginLink;
+        add: btnLoginRpc;
+        add: btnAdd;
+        add: btnCopy;
+        add: btnEdit;
+        add: btnDelete;
+        spacing: 5;
+        yourself.
+
+    "2. Group the bottom buttons"
+    bottomButtons := SpBoxLayout newLeftToRight
+        add: btnCommit;
+        add: btnLogout;
+        add: btnAbort;
+        add: btnCurrent;
+        add: btnBegin;
+        add: btnBreak;
+        spacing: 5;
+        yourself.
+
+    "3. Group the Top Section (keeps label, list, and buttons tight together)"
+    topHalf := SpBoxLayout newTopToBottom
+        add: 'Session Parameters' expand: false;
+        add: parametersList;
+        add: topButtons expand: false;
+        yourself.
+
+    "4. Group the Bottom Section (keeps label, list, and buttons tight together)"
+    bottomHalf := SpBoxLayout newTopToBottom
+        add: 'Active Sessions' expand: false;
+        add: sessionList;
+        add: bottomButtons expand: false;
+        yourself.
+
+    "5. Main Layout: Adds a 10px gap ONLY between the main sections"
+    ^ SpBoxLayout newTopToBottom
+        spacing: 10;
+        add: mainMenu expand: false;
+        add: topHalf;       "Gap above 'Session Parameters'"
+        add: bottomHalf;    "Gap above 'Active Sessions'"
         yourself
 ]
 
