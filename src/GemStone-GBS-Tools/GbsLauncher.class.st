@@ -55,6 +55,10 @@ GbsLauncher >> doLogin [
     [
         GbsServerInterface uniqueInstance libraryPath: inputLibPath text.
         
+        "THE FIX: Remove any stale Simple Launcher Sessions first to prevent duplicates"
+        GbsSessionParameters allSessions 
+            removeAllSuchThat: [ :each | each name = 'Simple Launcher Session' ].
+        
         session := GbsSessionParameters new
             name: 'Simple Launcher Session';
             gemStoneName: inputStone text;
@@ -64,7 +68,6 @@ GbsLauncher >> doLogin [
                     
         GbsSessionParameters currentSession: session.
         
-        "Sync ALL open Simple Launchers and Classic Launchers safely"
         UIManager default defer: [
             GbsLauncher allInstancesDo: [ :each | each updateUIState ].
             GbsClassicLauncher allInstancesDo: [ :each | each refreshAll ].
@@ -74,7 +77,7 @@ GbsLauncher >> doLogin [
             
     ] on: Error do: [ :ex | 
         self inform: 'Connection Failed: ', ex messageText.
-        self updateUIState. "Reset UI on failure"
+        self updateUIState.
     ].
 ]
 

@@ -268,9 +268,12 @@ GbsClassicLauncher >> initializePresenters [
     btnBegin  := self newButton label: 'Begin'; icon: (self iconNamed: #smallUpdate); action: [ self doBegin ].
     btnBreak  := self newButton label: 'Break'; icon: (self iconNamed: #smallCancel); action: [ self doBreak ].
 
-    "--> THE MAGIC: Wire up the click events to update button states <--"
+    "--> Wire up the click events to update button states <--"
     parametersList whenSelectionChangedDo: [ :selection | self updateButtonStates ].
     sessionList whenSelectionChangedDo: [ :selection | self updateButtonStates ].
+
+    "--> DOUBLE CLICK ACTION <--"
+    sessionList whenActivatedDo: [ :selection | self openWorkspaceFor: selection selectedItem ].
 
     self refreshAll.
 ]
@@ -342,6 +345,18 @@ GbsClassicLauncher >> menuWindow [
         addItem: [ :item | item name: 'Refresh'; action: [ self refreshSessionList ] ];
         addItem: [ :item | item name: 'Close'; action: [ self delete ] ];
         yourself.
+]
+
+{ #category : 'actions' }
+GbsClassicLauncher >> openWorkspaceFor: aSession [
+    aSession ifNil: [ ^ self ].
+    
+    "1. Ensure this session is the active one globally before opening tools"
+    GbsSessionParameters currentSession: aSession.
+    self refreshAll.
+    
+    "2. Open the Workspace"
+    GbsWorkspace new open.
 ]
 
 { #category : 'actions' }
