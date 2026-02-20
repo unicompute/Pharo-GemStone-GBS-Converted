@@ -32,7 +32,9 @@ GbsSession class >> loginWithUser: aUser password: aPass stone: aStone [
 
 { #category : 'transactions' }
 GbsSession >> abort [
-    ^ serverInterface apiGciAbort: sessionId
+    "Discards uncommitted changes and syncs with the latest GemStone state."
+    GbsServerInterface uniqueInstance apiGciAbort: self sessionOop.
+    ^ true.
 ]
 
 { #category : 'evaluating' }
@@ -48,7 +50,9 @@ GbsSession >> basicEvaluate: aString [
 ]
 
 { #category : 'transactions' }
-GbsSession >> commit [ GbsServerInterface uniqueInstance apiGciCommit = 1 ifFalse: [ GbsServerInterface uniqueInstance checkError ]
+GbsSession >> commit [
+    "Flushes local object changes to the GemStone database."
+    ^ GbsServerInterface uniqueInstance apiGciCommit: self sessionOop.
 ]
 
 { #category : 'execution' }
@@ -73,7 +77,7 @@ GbsSession >> evaluateBlock: aBlock [
     ^ self evaluateString: aBlock sourceNode body sourceCode
 ]
 
-{ #category : 'execution' }
+{ #category : 'evaluating' }
 GbsSession >> evaluateString: aString [
     | resultOop buffer size |
     resultOop := serverInterface apiGciExecute: aString context: 20.
@@ -94,7 +98,7 @@ GbsSession >> evaluateString: aString [
     ^ resultOop
 ]
 
-{ #category : 'actions' }
+{ #category : 'execution' }
 GbsSession >> execute: aString [
     | resultOop buffer size |
     resultOop := serverInterface apiGciExecute: aString context: 20.
@@ -169,6 +173,52 @@ GbsSession >> fetchObject: anOop [
     ^ GbsProxy new oop: anOop session: self
 ]
 
+{ #category : 'accessing' }
+GbsSession >> fetchRemoteClassNamesIn: dictionaryName [
+
+  | script rawString |
+  script := '
+        | dict stream |
+        stream := WriteStream on: String new.
+        dict := System myUserProfile symbolList objectNamed: #' , dictionaryName , '.
+        dict ifNotNil: [
+            dict keysAndValuesDo: [:key :value |
+                value isBehavior ifTrue: [ 
+                    stream nextPutAll: key asString; nextPut: $, 
+                ]
+            ]
+        ].
+        stream contents
+    '.
+
+  "1. Evaluates the script, returning a local String by value"
+  rawString := self evaluate: script.
+
+  "2. Splitting it on the client creates a local Array, which IS a Collection"
+  ^ rawString substrings: ','
+]
+
+{ #category : 'browser backend' }
+GbsSession >> fetchRemoteDictionaries [
+    "Queries GemStone for all dictionary names in the user's symbol list, returned as a fast comma-separated string."
+    | script rawString |
+    
+    script := '| strm |
+    strm := WriteStream on: String new.
+    System myUserProfile symbolList 
+        do: [:dict | strm nextPutAll: dict name asString] 
+        separatedBy: [strm nextPutAll: '',''].
+    strm contents'.
+        
+    rawString := self evaluate: script.
+    
+    "Unbox if it came back as a Proxy"
+    (rawString class name = #GbsProxy) ifTrue: [ rawString := rawString asLocalString ].
+    
+    "Split the comma-separated string into a native Pharo Array"
+    ^ rawString substrings: ','.
+]
+
 { #category : 'evaluating' }
 GbsSession >> fetchTranscriptLogs [
     ^ GbsServerInterface uniqueInstance 
@@ -199,5 +249,11 @@ GbsSession >> sessionId: anInteger [ sessionId := anInteger
 ]
 
 { #category : 'accessing' }
-GbsSession >> sessionOop: i [ sessionOop := i
+GbsSession >> sessionOop [
+    ^ sessionOop
+]
+
+{ #category : 'accessing' }
+GbsSession >> sessionOop: anInteger [
+    sessionOop := anInteger
 ]
