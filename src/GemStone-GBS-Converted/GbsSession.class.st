@@ -240,6 +240,25 @@ GbsSession >> logout [ sessionOop ifNotNil: [ GbsServerInterface uniqueInstance 
 GbsSession >> parameters: p [ parameters := p. GbsSessionParameters classPool at: #CurrentSession put: self
 ]
 
+{ #category : 'evaluating' }
+GbsSession >> resultFor: anOop [
+  "Identify special GemStone OOP tags (GS64 3.7 Guide, Chapter 5)"
+
+  anOop = 20 ifTrue: [ ^ nil ].
+  anOop = 28 ifTrue: [ ^ true ].
+  anOop = 12 ifTrue: [ ^ false ].
+
+  "Check if it's a SmallInteger (Tag 2)"
+  ( anOop bitAnd: 7 ) = 2 ifTrue: [ ^ anOop bitShift: -3 ].
+
+  "Check if it's a Character (Tag 6)"
+  "Check if it's a Character (Tag 6)"
+  ( anOop bitAnd: 7 ) = 6 ifTrue: [ ^ Character codePoint: ( anOop bitShift: -3 ) ].
+
+  "If it's not a primitive, it's a complex object. Return a Proxy."
+  ^ GbsProxy oop: anOop session: self
+]
+
 { #category : 'accessing' }
 GbsSession >> sessionId [ ^ sessionId
 ]
@@ -256,4 +275,14 @@ GbsSession >> sessionOop [
 { #category : 'accessing' }
 GbsSession >> sessionOop: anInteger [
     sessionOop := anInteger
+]
+
+{ #category : 'signalling' }
+GbsSession >> signalError: aGciError [
+	"Translates a GemStone C-level error into a Pharo exception"
+	| errorMessage |
+	
+	errorMessage := aGciError message. 
+	
+	^ GbsError signal: errorMessage
 ]

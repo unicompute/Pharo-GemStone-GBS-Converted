@@ -1,17 +1,6 @@
 Class {
 	#name : 'GbsError',
 	#superclass : 'Error',
-	#instVars : [
-		'gemStoneExceptionProxy'
-	],
-	#category : 'GemStone-GBS-Converted',
-	#package : 'GemStone-GBS-Converted'
+	#category : 'GemStone-Pharo',
+	#package : 'GemStone-Pharo'
 }
-
-{ #category : 'accessing' }
-GbsError >> gemStoneExceptionProxy [ ^ gemStoneExceptionProxy
-]
-
-{ #category : 'accessing' }
-GbsError >> gemStoneExceptionProxy: p [ gemStoneExceptionProxy := p
-]
