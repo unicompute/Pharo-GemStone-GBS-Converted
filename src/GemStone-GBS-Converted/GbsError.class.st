@@ -1,6 +1,6 @@
 Class {
 	#name : 'GbsError',
 	#superclass : 'Error',
-	#category : 'GemStone-Pharo',
-	#package : 'GemStone-Pharo'
+	#category : 'GemStone-GBS-Converted',
+	#package : 'GemStone-GBS-Converted'
 }
