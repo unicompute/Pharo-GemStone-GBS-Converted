@@ -5,6 +5,9 @@ Block and Context cases for CannotReturn need to signal a dedicated exception.
 Class {
 	#name : 'CannotReturn',
 	#superclass : 'Error',
+	#instVars : [
+		'result'
+	],
 	#category : 'GemStone-GBS-Converted',
 	#package : 'GemStone-GBS-Converted'
 }

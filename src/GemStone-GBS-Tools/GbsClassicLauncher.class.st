@@ -16,7 +16,8 @@ Class {
 		'btnAdd',
 		'btnCopy',
 		'btnEdit',
-		'btnDelete'
+		'btnDelete',
+		'pollingProcess'
 	],
 	#category : 'GemStone-GBS-Tools',
 	#package : 'GemStone-GBS-Tools'
@@ -282,7 +283,9 @@ GbsClassicLauncher >> initializePresenters [
 GbsClassicLauncher >> initializeWindow: aWindow [
 	aWindow 
 		title: 'GemStone Launcher';
-		initialExtent: 500@400.
+		initialExtent: 500@400;
+		whenClosedDo: [ self stopPolling ].
+	self startPolling.
 ]
 
 { #category : 'actions' }
@@ -336,6 +339,7 @@ GbsClassicLauncher >> menuTools [
                 transcriptPresenter open.
                 transcriptPresenter startPolling.
             ] ];
+        addItem: [ :item | item name: 'Toggle Polling'; action: [ GbsSessionParameters togglePolling. self refreshAll ] ];
         yourself.
 ]
 
@@ -410,6 +414,23 @@ GbsClassicLauncher >> updateButtonStates [
             btnLogout disable. btnCommit disable. btnAbort disable. 
             btnCurrent disable. btnBegin disable. btnBreak disable. 
         ].
+]
+
+{ #category : 'polling' }
+GbsClassicLauncher >> startPolling [
+    pollingProcess ifNotNil: [ pollingProcess terminate ].
+    pollingProcess := [ 
+        [ self window isNotNil and: [ self window isOpen ] ] whileTrue: [ 
+            GbsSessionParameters pollingEnabled ifTrue: [ UIManager default defer: [ self refreshAll ] ].
+            (Delay forSeconds: 2) wait.
+        ] 
+    ] fork.
+]
+
+{ #category : 'polling' }
+GbsClassicLauncher >> stopPolling [
+    pollingProcess ifNotNil: [ pollingProcess terminate ].
+    pollingProcess := nil.
 ]
 
 { #category : 'private' }

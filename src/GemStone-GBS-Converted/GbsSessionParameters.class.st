@@ -28,6 +28,7 @@ Class {
 		'AllParameters',
 		'CurrentSession',
 		'Sessions'
+		'PollingEnabled',
 	],
 	#classInstVars : [
 		'allParameters',
@@ -407,3 +408,21 @@ GbsSessionParameters >> username [ ^ username
 { #category : 'accessing' }
 GbsSessionParameters >> username: aValue [ username := aValue
 ]
+
+{ #category : 'polling' }
+GbsSessionParameters class >> pollingEnabled [
+    "Persisted in the image as a global. Defaults to true."
+    ^ (Smalltalk globals at: #GbsPollingEnabled ifAbsent: [ true ])
+]
+
+{ #category : 'polling' }
+GbsSessionParameters class >> pollingEnabled: aBoolean [
+    Smalltalk globals at: #GbsPollingEnabled put: aBoolean.
+    ^ aBoolean
+]
+
+{ #category : 'polling' }
+GbsSessionParameters class >> togglePolling [
+    ^ self pollingEnabled: self pollingEnabled not
+]
+

@@ -43,6 +43,7 @@ GbsRemoteTranscript >> defaultLayout [
 { #category : 'logic' }
 GbsRemoteTranscript >> fetchLogs [
     | rawResult logsString activeSession |
+    (GbsSessionParameters pollingEnabled) ifFalse: [ ^ self ].
     activeSession := GbsSessionParameters currentSession.
     
     activeSession ifNotNil: [
@@ -76,7 +77,14 @@ GbsRemoteTranscript >> initializePresenters [
 GbsRemoteTranscript >> initializeWindow: aWindowPresenter [
     aWindowPresenter 
         title: 'GemStone Remote Transcript';
-        initialExtent: 500@300.
+        initialExtent: 500@300;
+        whenClosedDo: [ self stopPolling ].
+]
+
+{ #category : 'logic' }
+GbsRemoteTranscript >> stopPolling [
+    pollingProcess ifNotNil: [ pollingProcess terminate ].
+    pollingProcess := nil.
 ]
 
 { #category : 'logic' }

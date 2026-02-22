@@ -29,7 +29,7 @@ GbsWorkspace >> doIt [
         GbsSessionParameters currentSession evaluate: '[ ', code, ' ] value'.
         self inform: 'GemStone DoIt: Executed'.
         
-    ] on: Error do: [ :ex | self inform: 'GemStone Error: ', ex messageText ].
+    ] on: GbsError do: [ :ex | ex defaultAction ] on: Error do: [ :ex | self inform: 'GemStone Error: ', ex messageText ].
 ]
 
 { #category : 'actions' }
@@ -45,7 +45,7 @@ GbsWorkspace >> executeInGemStone [
         "Log success to transcript"
         GbsRemoteTranscript show: 'Successfully executed: ', code.
         
-    ] on: Error do: [ :ex | 
+    ] on: GbsError do: [ :ex | ex defaultAction ] on: Error do: [ :ex | 
         (ex messageText includesSubstring: 'session ID is invalid')
             ifTrue: [ 
                 GbsRemoteTranscript show: 'Error: GemStone Session expired.'.
@@ -69,7 +69,7 @@ GbsWorkspace >> gemStoneDebugIt [
         self inform: 'GemStone: Executed (No errors to debug)'.
         GbsRemoteTranscript show: 'Debug It: Executed without errors.'.
         
-    ] on: Error do: [ :ex | 
+    ] on: GbsError do: [ :ex | ex defaultAction ] on: Error do: [ :ex | 
         "Send the error message to the transcript"
         GbsRemoteTranscript show: 'Debug It Error caught: ', ex messageText.
         
@@ -101,7 +101,7 @@ GbsWorkspace >> gemStonePrintIt [
                    
         textEditor text: newText.
         
-    ] on: Error do: [ :ex | self inform: 'GemStone Error: ', ex messageText ].
+    ] on: GbsError do: [ :ex | ex defaultAction ] on: Error do: [ :ex | self inform: 'GemStone Error: ', ex messageText ].
 ]
 
 { #category : 'initialization' }
@@ -177,7 +177,7 @@ GbsWorkspace >> inspectIt [
         "Inspect the raw result (either a Proxy or a native Pharo object)"
         rawResult inspect.
         
-    ] on: Error do: [ :ex | self inform: 'GemStone Error: ', ex messageText ].
+    ] on: GbsError do: [ :ex | ex defaultAction ] on: Error do: [ :ex | self inform: 'GemStone Error: ', ex messageText ].
 ]
 
 { #category : 'local actions' }
@@ -208,7 +208,7 @@ GbsWorkspace >> localDebugIt [
         "4. Tell the process to open the debugger on itself"
         process debug.
             
-    ] on: Error do: [ :ex | self inform: 'Pharo Local Error: ', ex messageText ].
+    ] on: GbsError do: [ :ex | ex defaultAction ] on: Error do: [ :ex | self inform: 'Pharo Local Error: ', ex messageText ].
 ]
 
 { #category : 'local actions' }
@@ -221,7 +221,7 @@ GbsWorkspace >> localDoIt [
         "Execute locally using standard Pharo Compiler"
         Smalltalk compiler evaluate: code.
         self inform: 'Local DoIt: Executed'.
-    ] on: Error do: [ :ex | self inform: 'Local Error: ', ex messageText ].
+    ] on: GbsError do: [ :ex | ex defaultAction ] on: Error do: [ :ex | self inform: 'Local Error: ', ex messageText ].
 ]
 
 { #category : 'local actions' }
@@ -233,7 +233,7 @@ GbsWorkspace >> localInspectIt [
     [ 
         result := Smalltalk compiler evaluate: code.
         result inspect.
-    ] on: Error do: [ :ex | self inform: 'Local Error: ', ex messageText ].
+    ] on: GbsError do: [ :ex | ex defaultAction ] on: Error do: [ :ex | self inform: 'Local Error: ', ex messageText ].
 ]
 
 { #category : 'local actions' }
@@ -246,7 +246,7 @@ GbsWorkspace >> localPrintIt [
         result := Smalltalk compiler evaluate: code.
         "Use our manual insertion helper"
         self insertResult: result printString.
-    ] on: Error do: [ :ex | self inform: 'Local Error: ', ex messageText ].
+    ] on: GbsError do: [ :ex | ex defaultAction ] on: Error do: [ :ex | self inform: 'Local Error: ', ex messageText ].
 ]
 
 { #category : 'private' }

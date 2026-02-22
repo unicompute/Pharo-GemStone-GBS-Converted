@@ -11,7 +11,9 @@ Class {
 		'btnWorkspace',
 		'btnBrowser',
 		'btnTranscript',
-		'statusLabel'
+		'btnPolling',
+		'statusLabel',
+		'pollingProcess'
 	],
 	#category : 'GemStone-GBS-Tools',
 	#package : 'GemStone-GBS-Tools'
@@ -43,6 +45,7 @@ GbsLauncher >> defaultLayout [
             add: btnWorkspace;
             add: btnBrowser;
             add: btnTranscript;
+            add: btnPolling;
             yourself );
       add: statusLabel;
       yourself
@@ -121,6 +124,7 @@ GbsLauncher >> initializePresenters [
     btnWorkspace := self newButton label: 'Workspace'; icon: (self iconNamed: #glamorousEdit).
     btnBrowser := self newButton label: 'Class Browser'; icon: (self iconNamed: #glamorousBrowse).
     btnTranscript := self newButton label: 'Remote Transcript'; icon: (self iconNamed: #glamorousAlignJustify).
+    btnPolling := self newButton label: 'Polling: On'; icon: (self iconNamed: #smallRefresh).
     
     "4. Status"
     statusLabel := self newLabel label: 'Status: Initializing...'.
@@ -131,6 +135,7 @@ GbsLauncher >> initializePresenters [
     btnWorkspace action: [ GbsWorkspace new open ].
     btnBrowser action: [ GbsBrowser new open ].
     btnTranscript action: [ | t | t := GbsRemoteTranscript new. t open. t startPolling. ].
+    btnPolling action: [ self togglePollingPreference ].
     
     "6. SET INITIAL STATE"
     self updateUIState.
@@ -140,7 +145,26 @@ GbsLauncher >> initializePresenters [
 GbsLauncher >> initializeWindow: aWindowPresenter [
     aWindowPresenter 
         title: 'GemStone GBS Launcher';
-        initialExtent: 350@400.
+        initialExtent: 350@400;
+        whenClosedDo: [ self stopPolling ].
+    self startPolling.
+]
+
+{ #category : 'polling' }
+GbsLauncher >> startPolling [
+    pollingProcess ifNotNil: [ pollingProcess terminate ].
+    pollingProcess := [ 
+        [ self window isNotNil and: [ self window isOpen ] ] whileTrue: [ 
+            GbsSessionParameters pollingEnabled ifTrue: [ UIManager default defer: [ self updateUIState ] ].
+            (Delay forSeconds: 2) wait.
+        ] 
+    ] fork.
+]
+
+{ #category : 'polling' }
+GbsLauncher >> stopPolling [
+    pollingProcess ifNotNil: [ pollingProcess terminate ].
+    pollingProcess := nil.
 ]
 
 { #category : 'updating' }
@@ -151,6 +175,8 @@ GbsLauncher >> updateUIState [
     activeSession := GbsSessionParameters allSessions
         detect: [ :each | each name = 'Simple Launcher Session' ]
         ifNone: [ nil ].
+
+    self updatePollingLabel.
 
     activeSession ifNotNil: [
         "We are logged in: Disable login, enable tools"
@@ -168,3 +194,16 @@ GbsLauncher >> updateUIState [
         btnWorkspace disable. btnBrowser disable. btnTranscript disable.
     ].
 ]
+
+
+{ #category : 'polling' }
+GbsLauncher >> togglePollingPreference [
+    GbsSessionParameters togglePolling.
+    self updatePollingLabel.
+]
+
+{ #category : 'polling' }
+GbsLauncher >> updatePollingLabel [
+    btnPolling label: (GbsSessionParameters pollingEnabled ifTrue: [ 'Polling: On' ] ifFalse: [ 'Polling: Off' ]).
+]
+
